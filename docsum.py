@@ -24,7 +24,6 @@ def split_document_into_chunks(text, chunk_size=5000):
     chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
     return chunks
 
-
 import os
 from groq import Groq
 #from dotenv import load_dotenv
