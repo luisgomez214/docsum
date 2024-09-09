@@ -2,31 +2,39 @@ name: tests
 
 on:
   push:
-    branches: ['*']
+    branches:
+      - '**'
   pull_request:
-    branches: ['*']
+    branches:
+      - '**'
 
 jobs:
-  tests:
+  run-tests:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [3.8]
-    runs-on: ubuntu-latest
+        python-version: [3.8]
     timeout-minutes: 30
     env:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python ${{matrix.python}}
-        uses: actions/setup-python@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
         with:
-          python-version: ${{matrix.python}}
-      - name: install dependencies
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y poppler-utils
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: test declaration
+
+      - name: Test declaration
         run: |
-	  for file in docs/*; do python3 docsum.py ${file}; done
+          for file in docs/*; do python3 docsum.py ${file}; done
+
