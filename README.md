@@ -4,36 +4,6 @@
 
 Use an LLM to summarize a document on the command line.
 
-## Setup
-
-Create a python virtual environment for packages.
-```
-$ python3 -m venv venv
-$ . ./venv/bin/activate
-$ echo venv > .gitignore
-```
-
-Install packages.
-```
-$ pip3 install groq fulltext
-$ pip3 freeze > requirements.txt
-``` 
-
-Create a .env file and add your GROQ_API_KEY
-```
-GROQ_API_KEY=your_api_key_here
-```
-
-```
-$ export $(cat .env)
-```
-
-## Use
-
-```
-$ python3 docsum.py <file_path>
-```
-
 EX:
 ```
 $ python3 docsum.py docs/'declaration'
