@@ -3,6 +3,19 @@ from groq import Groq
 import argparse
 import chardet
 
+# Function to split the document into chunks
+def split_document_into_chunks(text):
+    """
+    Split the input text into smaller chunks so that an LLM can process those chunks individually.
+
+    Args:
+        text (str): The input text to split.
+
+    Returns:
+        list: A list of text chunks.
+    """
+    return text.split('\n\n')
+
 # Function to detect encoding
 def detect_encoding(filename):
     with open(filename, 'rb') as f:
