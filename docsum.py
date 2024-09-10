@@ -37,7 +37,7 @@ def summarize_chunk(client, chunk, retries=3, delay=5):
         try:
             response = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "Summarize the input text below. Limit the summary to 1 sentence and use a 1st-grade reading level."},
+                    {"role": "system", "content": "Summarize the input text below. Limit the summary to 1 sentence and use a 1st grade reading level."},
                     {"role": "user", "content": chunk}
                 ],
                 model="llama3-8b-8192"
