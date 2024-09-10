@@ -16,15 +16,19 @@ if __name__ == '__main__':
     parser.add_argument('filename')
     args = parser.parse_args()
 
-    # Detect encoding
-    encoding = detect_encoding(args.filename)
-
     # Initialize the Groq client with the API key from the environment
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-    # Read the file with the detected encoding
-    with open(args.filename, encoding=encoding) as f:
-        text = f.read()
+    # Detect encoding
+    encoding = detect_encoding(args.filename)
+
+    try:
+        # Open the file with the detected encoding
+        with open(args.filename, 'r', encoding=encoding, errors='replace') as f:
+            text = f.read()
+    except Exception as e:
+        print(f"Error reading the file: {e}")
+        exit(1)
 
     # Call split_document_into_chunks on the text
     chunks = split_document_into_chunks(text)
