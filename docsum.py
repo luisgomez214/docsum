@@ -1,78 +1,84 @@
-import os
-from groq import Groq
-import argparse
-import fulltext
-import chardet
-import time
+def split_document_into_chunks(text):
+    '''
+    Split the input text into smaller chunks so that an LLM can process those chunks individually.
 
-def split_document_into_chunks(text, chunk_size=5000):
-    """
-    Split text into smaller chunks for LLM processing.
-    """
-    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+    >>> split_document_into_chunks('This is a sentence.\n\nThis is another paragraph.')
+    ['This is a sentence.', 'This is another paragraph.']
+    >>> split_document_into_chunks('This is a sentence.\n\nThis is another paragraph.\n\nThis is a third paragraph.')
+    ['This is a sentence.', 'This is another paragraph.', 'This is a third paragraph.']
+    >>> split_document_into_chunks('This is a sentence.')
+    ['This is a sentence.']
+    >>> split_document_into_chunks('')
+    []
+    >>> split_document_into_chunks('This is a sentence.\n')
+    ['This is a sentence.']
+    >>> split_document_into_chunks('This is a sentence.\n\n')
+    []
+    >>> split_document_into_chunks('This is a sentence.\n\nThis is another paragraph.\n\n')
+    ['This is a sentence.', 'This is another paragraph.']
+    '''
+    return text.split('\n\n')
 
-def get_text_from_file(filename):
-    """
-    Extract text from a file using fulltext or fallback to chardet for encoding detection.
-    """
-    try:
-        return fulltext.get(filename)
-    except Exception as e:
-        print(f"fulltext failed: {e}. Attempting chardet...")
 
-        try:
-            with open(filename, 'rb') as f:
-                encoding = chardet.detect(f.read())['encoding']
-            with open(filename, 'r', encoding=encoding) as f:
-                return f.read()
-        except Exception as e:
-            print(f"Failed to read file: {e}")
-            exit(1)
+if __name__ == '__main__':
+    import os
+    from groq import Groq
+    import argparse
 
-def summarize_chunk(client, chunk, retries=3, delay=5):
-    """
-    Summarize a chunk of text using the Groq API with retry logic.
-    """
-    for attempt in range(retries):
-        try:
-            response = client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": "Summarize the input text below. Limit the summary to 1 sentence and use a 1st-grade reading level."},
-                    {"role": "user", "content": chunk}
-                ],
-                model="llama3-8b-8192"
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
-            if attempt < retries - 1:
-                time.sleep(delay)
-            else:
-                print("Max retries reached. Skipping this chunk.")
-                return None
-
-def main():
-    # Parse command-line argument
+    # Parse command line args
     parser = argparse.ArgumentParser()
-    parser.add_argument('filename', help='Path to the file to be summarized')
+    parser.add_argument('filename')
     args = parser.parse_args()
 
-    # Initialize Groq client
+    # Initialize the Groq client with the API key from the environment
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-    # Extract text from the input file
-    text = get_text_from_file(args.filename)
+    # Read the file
+    with open(args.filename) as f:
+        text = f.read()
 
-    # Split document into chunks
+    # Call split_document_into_chunks on the text
     chunks = split_document_into_chunks(text)
 
-    # Summarize each chunk and collect the summaries
-    summaries = [summarize_chunk(client, chunk) for chunk in chunks if chunk]
+    # List to hold summaries of each chunk
+    summaries = []
 
-    # Combine the summaries into a final summary
-    final_summary = f"This is a summary of the file '{args.filename}': " + " ".join(summaries)
-    print(final_summary)
+    # Summarize each chunk
+    for chunk in chunks:
+        if chunk.strip():  # Skip empty chunks
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': 'Summarize the input text below. Limit the summary to 1 paragraph and use a 1st grade reading level.',
+                    },
+                    {
+                        'role': 'user',
+                        'content': chunk,
+                    }
+                ],
+                model="llama3-8b-8192",
+            )
+            summaries.append(chat_completion.choices[0].message.content)
 
-if __name__ == "__main__":
-    main()
+    # Combine the summaries into a smaller document
+    smaller_document = ' '.join(summaries)
+
+    # Summarize the smaller document
+    final_summary = client.chat.completions.create(
+        messages=[
+            {
+                'role': 'system',
+                'content': 'Summarize the input text below. Limit the summary to 1 paragraph and use a 1st grade reading level.',
+            },
+            {
+                'role': 'user',
+                'content': smaller_document,
+            }
+        ],
+        model="llama3-8b-8192",
+    )
+
+    # Print the final summary
+    print(final_summary.choices[0].message.content)
 
