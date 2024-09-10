@@ -1,40 +1,29 @@
-def split_document_into_chunks(text):
-    '''
-    Split the input text into smaller chunks so that an LLM can process those chunks individually.
+import os
+from groq import Groq
+import argparse
+import chardet
 
-    >>> split_document_into_chunks('This is a sentence.\n\nThis is another paragraph.')
-    ['This is a sentence.', 'This is another paragraph.']
-    >>> split_document_into_chunks('This is a sentence.\n\nThis is another paragraph.\n\nThis is a third paragraph.')
-    ['This is a sentence.', 'This is another paragraph.', 'This is a third paragraph.']
-    >>> split_document_into_chunks('This is a sentence.')
-    ['This is a sentence.']
-    >>> split_document_into_chunks('')
-    []
-    >>> split_document_into_chunks('This is a sentence.\n')
-    ['This is a sentence.']
-    >>> split_document_into_chunks('This is a sentence.\n\n')
-    []
-    >>> split_document_into_chunks('This is a sentence.\n\nThis is another paragraph.\n\n')
-    ['This is a sentence.', 'This is another paragraph.']
-    '''
-    return text.split('\n\n')
-
+# Function to detect encoding
+def detect_encoding(filename):
+    with open(filename, 'rb') as f:
+        raw_data = f.read()
+    result = chardet.detect(raw_data)
+    return result['encoding']
 
 if __name__ == '__main__':
-    import os
-    from groq import Groq
-    import argparse
-
     # Parse command line args
     parser = argparse.ArgumentParser()
     parser.add_argument('filename')
     args = parser.parse_args()
 
+    # Detect encoding
+    encoding = detect_encoding(args.filename)
+
     # Initialize the Groq client with the API key from the environment
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-    # Read the file
-    with open(args.filename) as f:
+    # Read the file with the detected encoding
+    with open(args.filename, encoding=encoding) as f:
         text = f.read()
 
     # Call split_document_into_chunks on the text
