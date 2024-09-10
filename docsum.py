@@ -1,20 +1,36 @@
+
 import os
 from groq import Groq
 import argparse
 import chardet
 
-# Function to split the document into chunks
-def split_document_into_chunks(text):
+# Function to split the document into chunks of a manageable size
+def split_document_into_chunks(text, max_chunk_size=1000):
     """
-    Split the input text into smaller chunks so that an LLM can process those chunks individually.
-
+    Split the input text into smaller chunks of a manageable size.
+    
     Args:
         text (str): The input text to split.
-
+        max_chunk_size (int): Maximum character length for each chunk.
+    
     Returns:
         list: A list of text chunks.
     """
-    return text.split('\n\n')
+    paragraphs = text.split('\n\n')
+    chunks = []
+    current_chunk = ""
+    
+    for paragraph in paragraphs:
+        if len(current_chunk) + len(paragraph) < max_chunk_size:
+            current_chunk += paragraph + "\n\n"
+        else:
+            chunks.append(current_chunk.strip())
+            current_chunk = paragraph + "\n\n"
+    
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    return chunks
 
 # Function to detect encoding
 def detect_encoding(filename):
@@ -43,8 +59,8 @@ if __name__ == '__main__':
         print(f"Error reading the file: {e}")
         exit(1)
 
-    # Call split_document_into_chunks on the text
-    chunks = split_document_into_chunks(text)
+    # Split document into manageable chunks
+    chunks = split_document_into_chunks(text, max_chunk_size=1000)
 
     # List to hold summaries of each chunk
     summaries = []
