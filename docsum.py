@@ -1,11 +1,10 @@
-
 import os
 from groq import Groq
 import argparse
 import chardet
 
 # Function to split the document into chunks of a manageable size
-def split_document_into_chunks(text, max_chunk_size=1000):
+def split_document_into_chunks(text, max_chunk_size=500):
     """
     Split the input text into smaller chunks of a manageable size.
     
@@ -19,7 +18,7 @@ def split_document_into_chunks(text, max_chunk_size=1000):
     paragraphs = text.split('\n\n')
     chunks = []
     current_chunk = ""
-    
+
     for paragraph in paragraphs:
         if len(current_chunk) + len(paragraph) < max_chunk_size:
             current_chunk += paragraph + "\n\n"
@@ -32,7 +31,7 @@ def split_document_into_chunks(text, max_chunk_size=1000):
     
     return chunks
 
-# Function to detect encoding
+# Function to detect file encoding
 def detect_encoding(filename):
     with open(filename, 'rb') as f:
         raw_data = f.read()
@@ -48,7 +47,7 @@ if __name__ == '__main__':
     # Initialize the Groq client with the API key from the environment
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-    # Detect encoding
+    # Detect encoding of the input file
     encoding = detect_encoding(args.filename)
 
     try:
@@ -60,15 +59,40 @@ if __name__ == '__main__':
         exit(1)
 
     # Split document into manageable chunks
-    chunks = split_document_into_chunks(text, max_chunk_size=1000)
+    chunks = split_document_into_chunks(text, max_chunk_size=500)
 
     # List to hold summaries of each chunk
     summaries = []
 
-    # Summarize each chunk
+    # Summarize each chunk, making sure each request stays within the context limit
     for chunk in chunks:
         if chunk.strip():  # Skip empty chunks
-            chat_completion = client.chat.completions.create(
+            try:
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            'role': 'system',
+                            'content': 'Summarize the input text below. Limit the summary to 1 paragraph and use a 1st grade reading level.',
+                        },
+                        {
+                            'role': 'user',
+                            'content': chunk,
+                        }
+                    ],
+                    model="llama3-8b-8192",
+                )
+                summaries.append(chat_completion.choices[0].message.content)
+            except Exception as e:
+                print(f"Error while summarizing chunk: {e}")
+                continue
+
+    # Combine the summaries into a smaller document
+    smaller_document = ' '.join(summaries)
+
+    # Summarize the smaller document if necessary
+    if len(smaller_document) > 500:  # Adjust the threshold based on LLM limits
+        try:
+            final_summary = client.chat.completions.create(
                 messages=[
                     {
                         'role': 'system',
@@ -76,31 +100,15 @@ if __name__ == '__main__':
                     },
                     {
                         'role': 'user',
-                        'content': chunk,
+                        'content': smaller_document,
                     }
                 ],
                 model="llama3-8b-8192",
             )
-            summaries.append(chat_completion.choices[0].message.content)
-
-    # Combine the summaries into a smaller document
-    smaller_document = ' '.join(summaries)
-
-    # Summarize the smaller document
-    final_summary = client.chat.completions.create(
-        messages=[
-            {
-                'role': 'system',
-                'content': 'Summarize the input text below. Limit the summary to 1 paragraph and use a 1st grade reading level.',
-            },
-            {
-                'role': 'user',
-                'content': smaller_document,
-            }
-        ],
-        model="llama3-8b-8192",
-    )
-
-    # Print the final summary
-    print(final_summary.choices[0].message.content)
+            print(final_summary.choices[0].message.content)
+        except Exception as e:
+            print(f"Error while summarizing final document: {e}")
+    else:
+        # If the document is already small, print the combined summary
+        print(smaller_document)
 
