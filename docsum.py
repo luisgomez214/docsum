@@ -1,114 +1,77 @@
 import os
 from groq import Groq
 import argparse
+import fulltext
 import chardet
+import time
 
-# Function to split the document into chunks of a manageable size
-def split_document_into_chunks(text, max_chunk_size=500):
+def split_document_into_chunks(text, chunk_size=5000):
     """
-    Split the input text into smaller chunks of a manageable size.
-    
-    Args:
-        text (str): The input text to split.
-        max_chunk_size (int): Maximum character length for each chunk.
-    
-    Returns:
-        list: A list of text chunks.
+    Split text into smaller chunks for LLM processing.
     """
-    paragraphs = text.split('\n\n')
-    chunks = []
-    current_chunk = ""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
-    for paragraph in paragraphs:
-        if len(current_chunk) + len(paragraph) < max_chunk_size:
-            current_chunk += paragraph + "\n\n"
-        else:
-            chunks.append(current_chunk.strip())
-            current_chunk = paragraph + "\n\n"
-    
-    if current_chunk:
-        chunks.append(current_chunk.strip())
-    
-    return chunks
+def get_text_from_file(filename):
+    """
+    Extract text from a file using fulltext or fallback to chardet for encoding detection.
+    """
+    try:
+        return fulltext.get(filename)
+    except Exception as e:
+        print(f"fulltext failed: {e}. Attempting chardet...")
 
-# Function to detect file encoding
-def detect_encoding(filename):
-    with open(filename, 'rb') as f:
-        raw_data = f.read()
-    result = chardet.detect(raw_data)
-    return result['encoding']
+        try:
+            with open(filename, 'rb') as f:
+                encoding = chardet.detect(f.read())['encoding']
+            with open(filename, 'r', encoding=encoding) as f:
+                return f.read()
+        except Exception as e:
+            print(f"Failed to read file: {e}")
+            exit(1)
 
-if __name__ == '__main__':
-    # Parse command line args
+def summarize_chunk(client, chunk, retries=3, delay=5):
+    """
+    Summarize a chunk of text using the Groq API with retry logic.
+    """
+    for attempt in range(retries):
+        try:
+            response = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "Summarize the input text below. Limit the summary to 1 sentence and use a 1st-grade reading level."},
+                    {"role": "user", "content": chunk}
+                ],
+                model="llama3-8b-8192"
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {e}")
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                print("Max retries reached. Skipping this chunk.")
+                return None
+
+def main():
+    # Parse command-line argument
     parser = argparse.ArgumentParser()
-    parser.add_argument('filename')
+    parser.add_argument('filename', help='Path to the file to be summarized')
     args = parser.parse_args()
 
-    # Initialize the Groq client with the API key from the environment
+    # Initialize Groq client
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-    # Detect encoding of the input file
-    encoding = detect_encoding(args.filename)
+    # Extract text from the input file
+    text = get_text_from_file(args.filename)
 
-    try:
-        # Open the file with the detected encoding
-        with open(args.filename, 'r', encoding=encoding, errors='replace') as f:
-            text = f.read()
-    except Exception as e:
-        print(f"Error reading the file: {e}")
-        exit(1)
+    # Split document into chunks
+    chunks = split_document_into_chunks(text)
 
-    # Split document into manageable chunks
-    chunks = split_document_into_chunks(text, max_chunk_size=500)
+    # Summarize each chunk and collect the summaries
+    summaries = [summarize_chunk(client, chunk) for chunk in chunks if chunk]
 
-    # List to hold summaries of each chunk
-    summaries = []
+    # Combine the summaries into a final summary
+    final_summary = f"This is a summary of the file '{args.filename}': " + " ".join(summaries)
+    print(final_summary)
 
-    # Summarize each chunk, making sure each request stays within the context limit
-    for chunk in chunks:
-        if chunk.strip():  # Skip empty chunks
-            try:
-                chat_completion = client.chat.completions.create(
-                    messages=[
-                        {
-                            'role': 'system',
-                            'content': 'Summarize the input text below. Limit the summary to 1 paragraph and use a 1st grade reading level.',
-                        },
-                        {
-                            'role': 'user',
-                            'content': chunk,
-                        }
-                    ],
-                    model="llama3-8b-8192",
-                )
-                summaries.append(chat_completion.choices[0].message.content)
-            except Exception as e:
-                print(f"Error while summarizing chunk: {e}")
-                continue
-
-    # Combine the summaries into a smaller document
-    smaller_document = ' '.join(summaries)
-
-    # Summarize the smaller document if necessary
-    if len(smaller_document) > 500:  # Adjust the threshold based on LLM limits
-        try:
-            final_summary = client.chat.completions.create(
-                messages=[
-                    {
-                        'role': 'system',
-                        'content': 'Summarize the input text below. Limit the summary to 1 paragraph and use a 1st grade reading level.',
-                    },
-                    {
-                        'role': 'user',
-                        'content': smaller_document,
-                    }
-                ],
-                model="llama3-8b-8192",
-            )
-            print(final_summary.choices[0].message.content)
-        except Exception as e:
-            print(f"Error while summarizing final document: {e}")
-    else:
-        # If the document is already small, print the combined summary
-        print(smaller_document)
-
+if __name__ == "__main__":
+    main()
