@@ -4,6 +4,7 @@ import argparse
 import fulltext
 import chardet
 import time
+import PyPDF2
 
 def split_document_into_chunks(text, chunk_size=5000):
     """
@@ -11,23 +12,41 @@ def split_document_into_chunks(text, chunk_size=5000):
     """
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
+def extract_text_from_pdf(filename):
+    """
+    Extract text from a PDF file using PyPDF2.
+    """
+    with open(filename, 'rb') as f:
+        reader = PyPDF2.PdfReader(f)
+        text = ""
+        for page_num in range(len(reader.pages)):
+            text += reader.pages[page_num].extract_text()
+        return text
+
 def get_text_from_file(filename):
     """
-    Extract text from a file using fulltext or fallback to chardet for encoding detection.
+    Extract text from a file. If PDF, use PyPDF2. Otherwise, try fulltext or fallback to chardet.
     """
-    try:
-        return fulltext.get(filename)
-    except Exception as e:
-        print(f"fulltext failed: {e}. Attempting chardet...")
-
+    if filename.endswith('.pdf'):
         try:
-            with open(filename, 'rb') as f:
-                encoding = chardet.detect(f.read())['encoding']
-            with open(filename, 'r', encoding=encoding) as f:
-                return f.read()
+            return extract_text_from_pdf(filename)
         except Exception as e:
-            print(f"Failed to read file: {e}")
+            print(f"PDF extraction failed: {e}")
             exit(1)
+    else:
+        try:
+            return fulltext.get(filename)
+        except Exception as e:
+            print(f"fulltext failed: {e}. Attempting chardet...")
+
+            try:
+                with open(filename, 'rb') as f:
+                    encoding = chardet.detect(f.read())['encoding']
+                with open(filename, 'r', encoding=encoding) as f:
+                    return f.read()
+            except Exception as e:
+                print(f"Failed to read file: {e}")
+                exit(1)
 
 def summarize_chunk(client, chunk, retries=3, delay=5):
     """
@@ -75,3 +94,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
