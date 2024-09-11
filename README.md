@@ -44,7 +44,7 @@ To summarize a document, run the following command:
 
 ```bash
 python docsum.py <your-file>
-
+```
 
 EX:
 ```
